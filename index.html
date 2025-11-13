@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PWA対応の3x3丸バツゲーム">
+    <meta name="theme-color" content="#2196F3">
+    <title>丸バツゲーム - PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .game-info {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            min-height: 40px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 10px;
+            margin: 0 auto 30px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .cell {
+            background: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #333;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell:hover:not(:disabled) {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .cell:disabled {
+            cursor: not-allowed;
+        }
+
+        .cell.x {
+            color: #e74c3c;
+        }
+
+        .cell.o {
+            color: #3498db;
+        }
+
+        .reset-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .reset-btn:active {
+            transform: translateY(0);
+        }
+
+        .winner {
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .install-prompt {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .board {
+                grid-template-columns: repeat(3, 80px);
+                grid-template-rows: repeat(3, 80px);
+                gap: 8px;
+            }
+
+            .cell {
+                font-size: 2.5rem;
+            }
+
+            .game-info {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⭕ 丸バツゲーム ❌</h1>
+        <div class="game-info" id="gameInfo">プレイヤー ⭕ のターン</div>
+        <div class="board" id="board">
+            <button class="cell" data-index="0"></button>
+            <button class="cell" data-index="1"></button>
+            <button class="cell" data-index="2"></button>
+            <button class="cell" data-index="3"></button>
+            <button class="cell" data-index="4"></button>
+            <button class="cell" data-index="5"></button>
+            <button class="cell" data-index="6"></button>
+            <button class="cell" data-index="7"></button>
+            <button class="cell" data-index="8"></button>
+        </div>
+        <button class="reset-btn" id="resetBtn">リセット</button>
+        <div class="install-prompt" id="installPrompt" style="display: none;">
+            このゲームをホーム画面に追加できます
+        </div>
+    </div>
+
+    <script>
+        // ゲームの状態管理
+        let board = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'O';
+        let gameActive = true;
+        const cells = document.querySelectorAll('.cell');
+        const gameInfo = document.getElementById('gameInfo');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // 勝利条件の組み合わせ
+        const winningConditions = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8],
+            [2, 4, 6]
+        ];
+
+        // セルクリック時の処理
+        function handleCellClick(e) {
+            const cell = e.target;
+            const index = parseInt(cell.getAttribute('data-index'));
+
+            if (board[index] !== '' || !gameActive) {
+                return;
+            }
+
+            board[index] = currentPlayer;
+            cell.textContent = currentPlayer === 'O' ? '⭕' : '❌';
+            cell.classList.add(currentPlayer.toLowerCase());
+            cell.disabled = true;
+
+            checkResult();
+        }
+
+        // 勝敗判定
+        function checkResult() {
+            let roundWon = false;
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    roundWon = true;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                gameInfo.textContent = `プレイヤー ${currentPlayer === 'O' ? '⭕' : '❌'} の勝利！`;
+                gameInfo.classList.add('winner');
+                gameActive = false;
+                return;
+            }
+
+            // 引き分けチェック
+            if (!board.includes('')) {
+                gameInfo.textContent = '引き分け！';
+                gameActive = false;
+                return;
+            }
+
+            // 次のプレイヤーに交代
+            currentPlayer = currentPlayer === 'O' ? 'X' : 'O';
+            gameInfo.textContent = `プレイヤー ${currentPlayer === 'O' ? '⭕' : '❌'} のターン`;
+        }
+
+        // リセット処理
+        function resetGame() {
+            board = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'O';
+            gameActive = true;
+            gameInfo.textContent = 'プレイヤー ⭕ のターン';
+            gameInfo.classList.remove('winner');
+
+            cells.forEach(cell => {
+                cell.textContent = '';
+                cell.disabled = false;
+                cell.classList.remove('x', 'o');
+            });
+        }
+
+        // イベントリスナーの設定
+        cells.forEach(cell => {
+            cell.addEventListener('click', handleCellClick);
+        });
+
+        resetBtn.addEventListener('click', resetGame);
+
+        // Service Workerの登録
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker registered:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // PWAインストールプロンプト
+        let deferredPrompt;
+        const installPrompt = document.getElementById('installPrompt');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installPrompt.style.display = 'block';
+            
+            installPrompt.addEventListener('click', () => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                    installPrompt.style.display = 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
